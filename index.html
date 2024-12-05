@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>あなたのショートストーリーを誰かのヒントに</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 600px;
+        margin: auto;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      textarea {
+        width: 100%;
+        height: 80px;
+        margin-bottom: 15px;
+        padding: 10px;
+        font-size: 14px;
+      }
+      button {
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      #output {
+        margin-top: 20px;
+        padding: 10px;
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+      }
+      #loading {
+        display: none;
+        font-size: 16px;
+        color: #555;
+        margin-top: 10px;
+      }
+      img {
+        max-width: 100%;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h2>あなたのショートストーリーを誰かのヒントに</h2>
+      <form id="storyForm">
+        <label for="question1">1. 共有したい人生経験は何ですか？</label>
+        <textarea id="question1" required></textarea>
+
+        <label for="question2"
+          >2.
+          どのような出来事でしたか？背景、状況、登場人物、その時の感情を教えてください。</label
+        >
+        <textarea id="question2" required></textarea>
+
+        <label for="question3"
+          >3. この出来事からどのような経験を得ましたか？</label
+        >
+        <textarea id="question3" required></textarea>
+
+        <button type="submit">ストーリーを生成</button>
+      </form>
+      <div id="loading">生成中...</div>
+      <div id="output"></div>
+    </div>
+
+    <script>
+      $(document).ready(function () {
+        const apiKey = "APIkey";
+
+        $("#storyForm").on("submit", function (e) {
+          e.preventDefault();
+
+          // ユーザーの入力データを取得
+          const experience = $("#question1").val().trim();
+          const details = $("#question2").val().trim();
+          const lessons = $("#question3").val().trim();
+
+          // プロンプト作成
+          const storyPrompt = `
+            以下の質問に基づいて、800字以内のショートストーリーを作成してください：
+            1. 共有したい人生経験: ${experience}
+            2. 出来事の背景、状況、登場人物、その時の感情: ${details}
+            3. 得た教訓: ${lessons}
+            ストーリーを段落に分けてください。文末の「終わり」は不要です。
+          `;
+
+          // ローディング表示
+          $("#loading").show();
+          $("#output").html("");
+
+          // ChatGPT APIリクエスト
+          fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: "gpt-3.5-turbo",
+              messages: [
+                { role: "system", content: "あなたは優れた日本語の作家です。" },
+                { role: "user", content: storyPrompt },
+              ],
+              max_tokens: 800,
+              temperature: 0.7,
+            }),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              const story = data.choices[0].message.content.trim();
+
+              // DALL·Eプロンプト
+              const imagePrompt = `以下のstoryを登場人物と共にフランスのポップな絵の雰囲気で描いて。全体の色彩はセピアトーンと温かみのあるパステルカラーで構成されている。: ${story}`;
+
+              // DALL·E APIリクエスト
+              fetch("https://api.openai.com/v1/images/generations", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                  prompt: imagePrompt,
+                  n: 1,
+                  size: "1024x1024",
+                }),
+              })
+                .then((imageResponse) => imageResponse.json())
+                .then((imageData) => {
+                  const imageUrl = imageData.data[0].url;
+
+                  // ストーリーと画像を表示
+                  $("#loading").hide();
+                  $("#output").html(`
+                    <h2>あなたのショートストーリー</h2>
+                    <div>${story.replace(/\n/g, "<p>")}</div>
+                    <img src="${imageUrl}" alt="ストーリーの挿絵" />
+                  `);
+                })
+                .catch((imageError) => {
+                  console.error(imageError);
+                  $("#loading").hide();
+                  $("#output").html(`
+                    <h2>あなたのショートストーリー</h2>
+                    <div>${story.replace(/\n/g, "<p>")}</div>
+                    <p>挿絵の生成に失敗しました。</p>
+                  `);
+                });
+            })
+            .catch((error) => {
+              console.error(error);
+              $("#loading").hide();
+              $("#output").html(`<p>エラーが発生しました: ${error.message}</p>`);
+            });
+        });
+      });
+    </script>
+  </body>
+</html>
